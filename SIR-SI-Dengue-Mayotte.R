@@ -457,7 +457,7 @@ ts_hum   <- weekly_norm$hum_norm
 ts_rain  <- weekly_norm$rain_norm
 
 # compute correlations for lags 0 to 12
-lags <- 0:30
+lags <- 0:12
 lag_corr <- tibble(
   lag = lags,
   temp_corr = sapply(lags, function(l) cor(ts_cases[(l+1):length(ts_cases)],
@@ -471,6 +471,7 @@ lag_corr <- tibble(
                                            use="complete.obs"))
 ) %>%
   pivot_longer(cols = -lag, names_to = "variable", values_to = "correlation")
+
 
 print(ggplot(lag_corr, aes(x = lag, y = correlation, color = variable)) +
   geom_line(linewidth = 1) +
@@ -521,40 +522,62 @@ h <- function(P) {
   1 + alpha_R * P
 }
 
-# beta(t)
-beta_t <- beta0 * g(T_lag) * h(P_lag)
+# Normalize observed incidence (scale between 0 and 1)
+normalized_incidence <- weekly_cases / max(weekly_cases, na.rm = TRUE)
+
+# Maximum beta(t) value for secondary axis scaling
+beta_max <- max(beta_t, na.rm = TRUE)
+
+# Align incidence with beta(t) scale
+aligned_incidence <- normalized_incidence * beta_max
+
 df <- data.frame(
   week = weeks,
   beta_t = beta_t,
-  threshold = seuil
+  threshold = threshold,
+  normalized_incidence = normalized_incidence,
+  aligned_incidence = aligned_incidence
 ) %>%
   na.omit() %>%
   mutate(
     regime = ifelse(beta_t > threshold, "Above threshold", "Below threshold")
   )
 
-# Graphics
-p <- ggplot(df, aes(x = week, y = beta_t)) +
+# Graph with double y-axis
+p <- ggplot(df, aes(x = week)) +
+  # Bars for normalized observed incidence (background)
+  geom_col(aes(y = aligned_incidence), 
+           fill = "cyan", alpha = 0.5, width = 0.8) +
+  # Red shaded area when beta(t) exceeds threshold
   geom_ribbon(
     data = subset(df, beta_t > threshold),
     aes(ymin = threshold, ymax = beta_t),
-    fill = "red", alpha = 0.2
+    fill = "white", alpha = 0.3
   ) +
-  geom_line(aes(color = regime), linewidth = 1) +
+  # beta(t) curve
+  geom_line(aes(y = beta_t, color = regime), linewidth = 1.2) +
+  # Horizontal threshold line
   geom_hline(
-    yintercept = seuil,
+    yintercept = threshold,
     linetype = "dashed",
-    linewidth = 1.2,
+    linewidth = 1,
     color = "black"
   ) +
+  # Color scale
   scale_color_manual(values = c(
     "Above threshold" = "red",
     "Below threshold" = "blue"
   )) +
+  # Y-axis with secondary axis
+  scale_y_continuous(
+    name = expression(beta(t)),
+    sec.axis = sec_axis(~ . / beta_max, 
+                        name = "Normalized observed incidence",
+                        labels = scales::percent_format(accuracy = 1))
+  ) +
   labs(
-    title = expression("Dynamics of " * beta(t)),
+    title = expression("Dynamics of " * beta(t) * " and observed dengue incidence"),
     x = "Week (March 2019 - July 2020)",
-    y = expression(beta(t)),
     color = ""
   ) +
   theme_minimal() +
@@ -564,7 +587,9 @@ p <- ggplot(df, aes(x = week, y = beta_t)) +
     panel.grid.minor = element_blank(),
     panel.background = element_rect(fill = "white", color = NA),
     panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5),
-    plot.title = element_text(hjust = 0.5, face = "bold")
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title.y = element_text(color = "blue"),
+    axis.title.y.right = element_text(color = "cyan")
   )
 
 print(p)
