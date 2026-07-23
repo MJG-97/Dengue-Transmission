@@ -201,7 +201,7 @@ neg_log_lik <- function(params_vec, model_type, T_opt = NULL, sigma_T = NULL) {
 
 # 6.2 WLS
 wls_loss <- function(params_vec, model_type, T_opt = NULL, sigma_T = NULL, 
-                         initial_mu = NULL) {
+                     initial_mu = NULL) {
   
   # Parameters extraction
   beta0 <- params_vec[1]
@@ -320,7 +320,7 @@ fit_model <- function(model_type, method = "mle", initial_params = NULL,
   fit <- optim(
     par = initial_params,
     fn = function(p) choice_mle_wls(p, model_type = model_type, method = method, 
-                                   T_opt = T_opt, sigma_T = sigma_T),
+                                    T_opt = T_opt, sigma_T = sigma_T),
     method = "L-BFGS-B",
     lower = lower,
     upper = upper,
@@ -420,7 +420,7 @@ df_plot <- data.frame(
 )
 
 df_long <- pivot_longer(df_plot, cols = c("Constant", "Lambrechts", "Gaussian"),
-                            names_to = "Model", values_to = "Predict")
+                        names_to = "Model", values_to = "Predict")
 
 p <- ggplot() +
   geom_col(data = df_plot, aes(x = Week, y = Observed), 
@@ -429,12 +429,12 @@ p <- ggplot() +
   scale_color_manual(values = c("Constant" = "#009E73", "Lambrechts" = "#AE123A", "Gaussian" = "#0072B2")) +
   labs(x = "Week", y = "Incidence", title = "SIR-SI")+ 
   theme(
-      legend.position="bottom",
-      panel.grid.major = element_blank(),
-      panel.grid.minor = element_blank(),
-      panel.background = element_blank(),
-      panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5)
-    )
+    legend.position="bottom",
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5)
+  )
 
 print(p)
 
@@ -474,26 +474,26 @@ lag_corr <- tibble(
 
 
 print(ggplot(lag_corr, aes(x = lag, y = correlation, color = variable)) +
-  geom_line(linewidth = 1) +
-  geom_point(size = 2) +
-  scale_color_manual(values = c(
-    "temp_corr" = "#AE123A",
-    "hum_corr" = "#FFC685",
-    "rain_corr" = "#0072B2"
-  )) +
-  labs(
-    title = "Correlation Between Climate Variables and Dengue Cases by Lag (0–12 weeks)",
-    x = "Lag (weeks)",
-    y = "Correlation coefficient",
-    color = "Variable"
-  )  +
-  theme(
-    legend.position="bottom",
-    panel.grid.major = element_blank(), 
-    panel.grid.minor = element_blank(),
-    panel.background = element_blank(),
-    panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5)
-  ))
+        geom_line(linewidth = 1) +
+        geom_point(size = 2) +
+        scale_color_manual(values = c(
+          "temp_corr" = "#AE123A",
+          "hum_corr" = "#FFC685",
+          "rain_corr" = "#0072B2"
+        )) +
+        labs(
+          title = "Correlation Between Climate Variables and Dengue Cases by Lag (0–12 weeks)",
+          x = "Lag (weeks)",
+          y = "Correlation coefficient",
+          color = "Variable"
+        )  +
+        theme(
+          legend.position="bottom",
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          panel.background = element_blank(),
+          panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5)
+        ))
 
 
 # Parameters
@@ -507,7 +507,7 @@ mu_v <- 0.02
 k <- 2
 
 # Threshold
-seuil <- sqrt((gamma * mu_v)/k)
+threshold <- sqrt((gamma * mu_v)/k)
 
 weeks <- 1:n_weeks
 T_lag <- c(rep(NA, l), weekly_temp[1:(n_weeks - l)])
@@ -524,6 +524,19 @@ h <- function(P) {
 
 # Normalize observed incidence (scale between 0 and 1)
 normalized_incidence <- weekly_cases / max(weekly_cases, na.rm = TRUE)
+
+
+# beta(t) function for gaussian model
+beta_t <- sapply(weeks, function(w) {
+  if (w <= l) {
+    return(NA_real_)
+  }
+  
+  T <- weekly_temp[w - l]
+  P <- weekly_rain[w - l]
+  
+  beta0 * g(T) * h(P)
+})
 
 # Maximum beta(t) value for secondary axis scaling
 beta_max <- max(beta_t, na.rm = TRUE)
