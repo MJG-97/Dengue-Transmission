@@ -12,7 +12,7 @@ This repository contains a compartmental SIR-SI mathematical model (5 compartmen
 - SIR-SI ODE model (5 equations)
 - Weekly incidence prediction functions
 - Parameter estimation via Maximum Likelihood Estimation (Negative Binomial)
-- Optimization and model comparison (AIC)
+- Optimization and model comparison (RSE)
 - Visualizations (observed/predicted incidences, climate-cases correlations, β(t) dynamics)
 
 ## Compared Models
