@@ -2,7 +2,7 @@
 # SIR-SI MODEL WITH CLIMATIC FORCING
 # Comparison of 3 models : Constant, Lambrechts, Gaussian
 # Available methods : MLE (Negative Binomial) ou WLS(Weighted Least Square)
-# Applied method : MLE
+# Applied method : WLS
 # ============================================================================
 
 # 1. Importing necessary packages
@@ -13,6 +13,7 @@ pkgs <- c("dplyr", "ggplot2", "tidyr", "deSolve", "gridExtra",
 new <- pkgs[!(pkgs %in% installed.packages()[, "Package"])]
 if(length(new) > 0) install.packages(new, dependencies = TRUE)
 invisible(lapply(pkgs, require, character.only = TRUE))
+options(digits = 10) 
 
 # 2. Loading data
 weekly_mayotte <- read.csv("data_complet_week.csv")
@@ -28,7 +29,7 @@ l <- 7
 Nh <- 269579                    # Human population in 2019 (INSEE)
 gamma_h <- 1/7                  # Human healing rate (1/7 per day)
 mu_v <- 0.02                    # Mortality rate of vectors (1/45 per day)
-k = 2                           # Average number of vector per human
+k <- 2                          # Average number of vector per human
 
 # 3. Climatic forcing function
 # 3.1 Lambrechts' Function (2011)
@@ -152,10 +153,10 @@ neg_log_lik <- function(params_vec, model_type, T_opt = NULL, sigma_T = NULL) {
   phi <- params_vec[4]
   
   # Constraints
-  if(beta0 <= 0.01 || beta0 > 2) return(1e10)
+  if(beta0 <= 0 || beta0 > 2) return(1e10)
   if(I0 < 1 || I0 > 300) return(1e10)
-  if(rho < 0.01 || rho > 0.3) return(1e10)
-  if(phi <= 0.1 || phi > 100) return(1e10)
+  if(rho <= 0 || rho > 0.3) return(1e10)
+  if(phi <= 0 || phi > 30) return(1e10)
   
   # alpha_R parameter for the gaussian model
   alpha_R <- 0
@@ -209,9 +210,9 @@ wls_loss <- function(params_vec, model_type, T_opt = NULL, sigma_T = NULL,
   rho <- params_vec[3]
   
   # Constraints
-  if(beta0 <= 0.01 || beta0 > 2) return(1e10)
+  if(beta0 <= 0 || beta0 > 2) return(1e10)
   if(I0 < 1 || I0 > 300) return(1e10)
-  if(rho < 0.01 || rho > 0.3) return(1e10)
+  if(rho <= 0 || rho > 0.3) return(1e10)
   
   alpha_R <- 0
   if(model_type == "gaussian") {
@@ -300,19 +301,19 @@ fit_model <- function(model_type, method = "mle", initial_params = NULL,
   # Bounds according to the model and the method
   if(model_type == "gaussian") {
     if(method == "mle") {
-      lower <- c(beta0 = 0.01, I0 = 1, rho = 0.01, phi = 0.1, alpha_R = 0)
-      upper <- c(beta0 = 2, I0 = 300, rho = 0.3, phi = 30, alpha_R = 10)
+      lower <- c(beta0 = 0.01, I0 = 1.0, rho = 0.01, phi = 0.01, alpha_R = 0.0)
+      upper <- c(beta0 = 2.0, I0 = 300.0, rho = 0.3, phi = 30.0, alpha_R = 10.0)
     } else { # wls
-      lower <- c(beta0 = 0.01, I0 = 1, rho = 0.01, alpha_R = 0)
-      upper <- c(beta0 = 2, I0 = 300, rho = 0.3, alpha_R = 10)
+      lower <- c(beta0 = 0.01, I0 = 1.0, rho = 0.01, alpha_R = 0.0)
+      upper <- c(beta0 = 2.0, I0 = 300.0, rho = 0.3, alpha_R = 10.0)
     }
   } else {
     if(method == "mle") {
-      lower <- c(beta0 = 0.01, I0 = 1, rho = 0.01, phi = 0.1)
-      upper <- c(beta0 = 2, I0 = 300, rho = 0.3, phi = 30)
+      lower <- c(beta0 = 0.01, I0 = 1.0, rho = 0.01, phi = 0.01)
+      upper <- c(beta0 = 2.0, I0 = 300.0, rho = 0.3, phi = 30.0)
     } else { # wls
-      lower <- c(beta0 = 0.01, I0 = 1, rho = 0.01)
-      upper <- c(beta0 = 2, I0 = 300, rho = 0.3)
+      lower <- c(beta0 = 0.01, I0 = 1.0, rho = 0.01)
+      upper <- c(beta0 = 2.0, I0 = 300.0, rho = 0.3)
     }
   }
   
@@ -324,7 +325,7 @@ fit_model <- function(model_type, method = "mle", initial_params = NULL,
     method = "L-BFGS-B",
     lower = lower,
     upper = upper,
-    control = list(maxit = 500, trace = trace)
+    control = list(maxit = 1000, trace = trace)
   )
   
   if(method == "mle") {
@@ -348,10 +349,10 @@ fit_model <- function(model_type, method = "mle", initial_params = NULL,
 
 # 8.  Implementation of optimisations
 # Method (= mle ou wls)
-# The choice is mle here
-fit_constant <- fit_model("constant", method = "mle")
-fit_lambrechts <- fit_model("lambrechts", method = "mle")
-fit_gaussian <- fit_model("gaussian", method = "mle", T_opt = 29.0, sigma_T = 4.0)
+# The choice is wls here
+fit_constant <- fit_model("constant", method = "wls")
+fit_lambrechts <- fit_model("lambrechts", method = "wls")
+fit_gaussian <- fit_model("gaussian", method = "wls", T_opt = 29.0, sigma_T = 4.0)
 
 
 # 9. Prediction
@@ -398,16 +399,10 @@ params <- data.frame(
   rho = c(round(fit_constant$par["rho"], 3),
           round(fit_lambrechts$par["rho"], 3),
           round(fit_gaussian$par["rho"], 3)),
-  phi = c(round(fit_constant$par["phi"], 2),
-          round(fit_lambrechts$par["phi"], 2),
-          round(fit_gaussian$par["phi"], 2)),
   alpha_R = c("-", "-", round(fit_gaussian$par["alpha_R"], 3)),
-  LogLik = c(round(fit_constant$logLik, 1),
-             round(fit_lambrechts$logLik, 1),
-             round(fit_gaussian$logLik, 1)),
-  AIC = c(round(fit_constant$AIC, 1),
-          round(fit_lambrechts$AIC, 1),
-          round(fit_gaussian$AIC, 1))
+  RSE = c(round(fit_constant$RSE, 2),
+          round(fit_lambrechts$RSE, 2),
+          round(fit_gaussian$RSE, 2))
 )
 
 # 11. Visualisations
@@ -422,10 +417,11 @@ df_plot <- data.frame(
 df_long <- pivot_longer(df_plot, cols = c("Constant", "Lambrechts", "Gaussian"),
                         names_to = "Model", values_to = "Predict")
 
+pdf("model_fit.pdf", width = 8, height = 5, family = "Helvetica")
 p <- ggplot() +
   geom_col(data = df_plot, aes(x = Week, y = Observed), 
            fill = "#FFBEB2", alpha = 0.6, width = 0.8) +
-  geom_line(data = df_long, aes(x = Week, y = Predict, color = Model), size = 1.2) +
+  geom_line(data = df_long, aes(x = Week, y = Predict, color = Model), linewidth = 1.2) +
   scale_color_manual(values = c("Constant" = "#009E73", "Lambrechts" = "#AE123A", "Gaussian" = "#0072B2")) +
   labs(x = "Week", y = "Incidence", title = "SIR-SI")+ 
   theme(
@@ -437,8 +433,9 @@ p <- ggplot() +
   )
 
 print(p)
+dev.off()
 
-cat("Model selected by AIC: ", params$Model[which.min(params$AIC)], "\n")
+cat("Model selected by RSE: ", params$Model[which.min(params$RSE)], "\n")
 
 
 # 12. Visualisations of lag and basic reproduction number (Through beta(t))
@@ -557,6 +554,7 @@ df <- data.frame(
   )
 
 # Graph with double y-axis
+pdf("beta_t_comparison.pdf", width = 8, height = 5, family = "Helvetica")
 p <- ggplot(df, aes(x = week)) +
   # Bars for normalized observed incidence (background)
   geom_col(aes(y = aligned_incidence), 
@@ -606,3 +604,4 @@ p <- ggplot(df, aes(x = week)) +
   )
 
 print(p)
+dev.off()
