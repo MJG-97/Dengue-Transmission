@@ -118,7 +118,7 @@ incidence_weekly <- function(out) {
 # Solve the model and return the predicted incidence
 predict_incidence <- function(pars) {
   # Conditions initiales
-  Iv0 <- pars$I0 / (pars$k * pars$Nh)  # Intitial infected vector
+  Iv0 <-pars$k * pars$I0  # Intitial infected vector
   y0 <- c(
     Sh0 = pars$Nh - pars$I0,
     Ih0 = pars$I0,
