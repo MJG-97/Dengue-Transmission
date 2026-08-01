@@ -33,23 +33,19 @@ k <- 2                          # Average number of vector per human
 
 # 3. Climatic forcing function
 # 3.1 Lambrechts' Function (2011)
-p_Lambrechts <- function(T) {
-  out <- 0.001044 * T * (T - 12.286) * sqrt(pmax(32.461 - T, 0))
+p_Lambrechts <- function(T_) {
+  out <- 0.001044 * T_ * (T_ - 12.286) * sqrt(pmax(32.461 - T_, 0))
   out[out < 0 | !is.finite(out)] <- 0
   out
 }
 
-s_Lambrechts <- function(T) {
-  raw <- (p_Lambrechts(T))^2
-  max_raw <- max((p_Lambrechts(seq(15, 32, by = 0.1)))^2, na.rm = TRUE)
-  out <- raw / max_raw
-  out[!is.finite(out)] <- 0
-  pmin(pmax(out, 0), 1)
+s_Lambrechts <- function(T_) {
+  p_Lambrechts(T_) * p_Lambrechts(T_)
 }
 
 # 3.2 Gaussian function with precipitation and temperature
-g_temp <- function(T, T_opt, sigma_T) {
-  exp(-(T - T_opt)^2 / (2 * sigma_T^2))
+g_temp <- function(T_, T_opt, sigma_T) {
+  exp(-(T_ - T_opt)^2 / (2 * sigma_T^2))
 }
 
 h_rain <- function(P, alpha_R) {
@@ -61,7 +57,7 @@ scaling_factor <- function(week, T_week, P_week, T_opt, sigma_T, alpha_R) {
   Tt <- T_week[w_lag]
   Pt <- P_week[w_lag]
   out <- g_temp(Tt, T_opt, sigma_T) * h_rain(Pt, alpha_R)
-  pmin(pmax(out, 0), 1)
+  out
 }
 
 # 4. SIR-SI model (5 COMPARTMENTS) =========================================
@@ -118,7 +114,7 @@ incidence_weekly <- function(out) {
 # Solve the model and return the predicted incidence
 predict_incidence <- function(pars) {
   # Conditions initiales
-  Iv0 <-pars$k * pars$I0  # Intitial infected vector
+  Iv0 <- k * pars$I0 # pars$I0 / (pars$k * pars$Nh)  # Intitial infected vector
   y0 <- c(
     Sh0 = pars$Nh - pars$I0,
     Ih0 = pars$I0,
@@ -285,9 +281,9 @@ fit_model <- function(model_type, method = "mle", initial_params = NULL,
   if(is.null(initial_params)) {
     if(model_type == "gaussian") {
       if(method == "mle") {
-        initial_params <- c(beta0 = 0.4, I0 = 10, rho = 0.1, phi = 1.0, alpha_R = 0.05)
+        initial_params <- c(beta0 = 0.4, I0 = 10, rho = 0.1, phi = 1.0, alpha_R = 0.5)
       } else { # wls
-        initial_params <- c(beta0 = 0.4, I0 = 10, rho = 0.1, alpha_R = 0.05)
+        initial_params <- c(beta0 = 0.4, I0 = 10, rho = 0.1, alpha_R = 0.5)
       }
     } else {
       if(method == "mle") {
@@ -325,7 +321,7 @@ fit_model <- function(model_type, method = "mle", initial_params = NULL,
     method = "L-BFGS-B",
     lower = lower,
     upper = upper,
-    control = list(maxit = 1000, trace = trace)
+    control = list(maxit = 2000, trace = trace)
   )
   
   if(method == "mle") {
@@ -495,7 +491,7 @@ print(ggplot(lag_corr, aes(x = lag, y = correlation, color = variable)) +
 
 # Parameters
 beta0 <- params$beta0[3]
-alpha_R <- params$beta0[3]
+alpha_R <- as.numeric(params$alpha_R[3])
 l <- 7
 T_opt <- 29
 sigma_T <- 4
@@ -510,30 +506,13 @@ weeks <- 1:n_weeks
 T_lag <- c(rep(NA, l), weekly_temp[1:(n_weeks - l)])
 P_lag <- c(rep(NA, l), weekly_rain[1:(n_weeks - l)])
 
-# Climatic functions
-g <- function(T) {
-  exp(-((T - T_opt)^2) / (2 * sigma_T^2))
-}
-
-h <- function(P) {
-  1 + alpha_R * P
-}
 
 # Normalize observed incidence (scale between 0 and 1)
 normalized_incidence <- weekly_cases / max(weekly_cases, na.rm = TRUE)
 
-
-# beta(t) function for gaussian model
-beta_t <- sapply(weeks, function(w) {
-  if (w <= l) {
-    return(NA_real_)
-  }
-  
-  T <- weekly_temp[w - l]
-  P <- weekly_rain[w - l]
-  
-  beta0 * g(T) * h(P)
-})
+beta_t = params$beta0[3] * scaling_factor(weeks, T_lag, P_lag, T_opt, sigma_T, alpha_R)
+beta_t_lamb =  params$beta0[2]*s_Lambrechts(T_lag)
+beta_t_const = params$beta0[1]
 
 # Maximum beta(t) value for secondary axis scaling
 beta_max <- max(beta_t, na.rm = TRUE)
@@ -552,6 +531,7 @@ df <- data.frame(
   mutate(
     regime = ifelse(beta_t > threshold, "Above threshold", "Below threshold")
   )
+
 
 # Graph with double y-axis
 pdf("beta_t_comparison.pdf", width = 8, height = 5, family = "Helvetica")
